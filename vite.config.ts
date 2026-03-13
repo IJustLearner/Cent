@@ -12,8 +12,12 @@ import svgr from "vite-plugin-svgr";
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd());
-
     const shouldAnalyze = process.env.ANALYZE === "true";
+
+    // 【关键修改】设置基础路径为仓库名
+    // 如果你的仓库名是 Cent，这里就是 '/Cent/'
+    // 如果你把仓库改名为 my-account，这里就要改成 '/my-account/'
+    const baseRoute = '/Cent/'; 
 
     const plugins: PluginOption[] = [
         Info(),
@@ -50,27 +54,31 @@ export default defineConfig(({ mode }) => {
                     { src: "icon.png", sizes: "192x192", type: "image/png" },
                     { src: "icon.png", sizes: "512x512", type: "image/png" },
                 ],
+                // PWA 在子路径下工作时，scope 通常也需要调整，VitePWA 插件通常会自动处理 base，
+                // 但如果遇到 PWA 安装问题，可能需要手动指定 scope: baseRoute
+                scope: baseRoute, 
                 protocol_handlers: [
                     {
                         protocol: "cent-accounting",
                         url: "/add-bills?text=%s",
-                        client_mode: "focus-existing", // 优先聚焦现有窗口
+                        client_mode: "focus-existing",
                     } as any,
                 ],
                 launch_handler: {
-                    client_mode: ["navigate-existing", "auto"], // 优先在现有窗口导航
+                    client_mode: ["navigate-existing", "auto"],
                 },
-                // 注意：标准 URL 链接唤起通过应用层面的 URL 参数处理实现
-                // 见 src/hooks/use-url-handler.tsx
             },
         }),
     ];
 
     if (shouldAnalyze) {
-        // 只有在环境变量 ANALYZE=true 时才添加分析插件
         plugins.push(analyzer());
     }
+
     return {
+        // 【核心配置】启用 base 路径，解决 GitHub Pages 子目录部署白屏问题
+        base: baseRoute,
+        
         plugins,
         resolve: {
             alias: {
@@ -80,15 +88,14 @@ export default defineConfig(({ mode }) => {
         worker: {
             format: "es",
         },
+        // 注意：server.proxy 仅在本地开发 (npm run dev) 时生效。
+        // 部署到 GitHub Pages 后，此配置不会起作用，API 请求需要指向真实后端或使用其他方案。
         server: {
             proxy: {
-                // 这里的 '/api' 是你在代码中调用的路径前缀
                 "/google-api": {
-                    target: "https://generativelanguage.googleapis.com", // 目标接口域名
-                    changeOrigin: true, // 必须设置为 true，以便绕过主机检查
-                    rewrite: (path) => path.replace(/^\/google-api/, ""), // 去掉路径中的前缀
-                    // 如果你的网络环境需要科学上网，且使用了本地代理软件，可能需要配置此项（可选）
-                    // secure: false,
+                    target: "https://generativelanguage.googleapis.com",
+                    changeOrigin: true,
+                    rewrite: (path) => path.replace(/^\/google-api/, ""),
                 },
             },
         },
